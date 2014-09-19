@@ -17,7 +17,16 @@
 #ifndef ApplicationUI_HPP_
 #define ApplicationUI_HPP_
 
+#include <errno.h>
+
 #include <QObject>
+
+#include <bb/cascades/QmlDocument>
+#include <bb/cascades/AbstractPane>
+#include <bb/cascades/Application>
+#include <bb/cascades/LocaleHandler>
+
+using namespace bb::cascades;
 
 namespace bb
 {
@@ -29,22 +38,29 @@ namespace bb
 
 class QTranslator;
 
-/*!
- * @brief Application UI object
- *
- * Use this object to create and init app UI, to create context objects, to register the new meta types etc.
- */
-class ApplicationUI : public QObject
+class ApplicationUI
+    : public QObject
 {
     Q_OBJECT
+
 public:
-    ApplicationUI();
-    virtual ~ApplicationUI() {}
+    ApplicationUI(bb::cascades::Application *app);
+    virtual ~ApplicationUI() { }
+
 private slots:
     void onSystemLanguageChanged();
+    void onTask1Signal();
+    void onTask2Signal();
+
+signals:
+    void message(const QVariant &text);
+
 private:
-    QTranslator* m_pTranslator;
-    bb::cascades::LocaleHandler* m_pLocaleHandler;
+    QTranslator *_translator;
+    LocaleHandler *_localeHandler;
+    QmlDocument *_qml;
+    AbstractPane *_root;
+    QObject *_mainPage;
 };
 
 #endif /* ApplicationUI_HPP_ */

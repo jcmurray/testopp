@@ -1,12 +1,12 @@
 /*
- * Copyright (c) 2011-2014 BlackBerry Limited.
- *
+ * Copyright (c) 2011-2013 BlackBerry Limited.
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ * 
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,20 +14,25 @@
  * limitations under the License.
  */
 
-#include "applicationui.hpp"
+import bb.cascades 1.2
 
-#include <bb/cascades/Application>
+ScrollView {
+    id: logScroller
 
-#include <QLocale>
-#include <QTranslator>
-
-#include <Qt/qdeclarativedebug.h>
-
-using namespace bb::cascades;
-
-Q_DECL_EXPORT int main(int argc, char **argv)
-{
-    Application app(argc, argv);
-    ApplicationUI appui(&app);
-    return Application::exec();
+    property alias text: log.text
+    
+    Container {
+        TextArea {
+            id: log
+            text: "Log:"
+            editable: false
+            textStyle {
+                base: SystemDefaults.TextStyles.BodyText
+                lineHeight: 1.1
+            }
+            onTextChanged: { 
+                logScroller.scrollToPoint(0, Infinity);
+            }
+        }
+    }
 }
