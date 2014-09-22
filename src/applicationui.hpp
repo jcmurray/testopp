@@ -25,6 +25,18 @@
 #include <bb/cascades/AbstractPane>
 #include <bb/cascades/Application>
 #include <bb/cascades/LocaleHandler>
+#include <btapi/btdevice.h>
+#include <btapi/btopp.h>
+
+typedef struct _event_names_t {
+    int id;
+    const char *name;
+} event_names_t;
+
+void btEvent(const int event, const char *bt_addr, const char *event_data);
+void oppUpdateCallback(const char *bdaddr, uint32_t sent, uint32_t total);
+void oppCompleteCallback(const char *bdaddr);
+void oppCancelledCallback(const char *bdaddr, bt_opp_reason_t reason);
 
 using namespace bb::cascades;
 
@@ -47,20 +59,33 @@ public:
     ApplicationUI(bb::cascades::Application *app);
     virtual ~ApplicationUI() { }
 
+    void handleBtEvent(const int event, const char *bt_addr, const char *event_data);
+    void handleOppUpdateCallback(const char *bdaddr, uint32_t sent, uint32_t total);
+    void handleOppCompleteCallback(const char *bdaddr);
+    void handleOppCancelledCallback(const char *bdaddr, bt_opp_reason_t reason);
+
 private slots:
     void onSystemLanguageChanged();
-    void onTask1Signal();
+    void onToggleBluetooth(const QVariant &on);
     void onTask2Signal();
 
 signals:
     void message(const QVariant &text);
+    void bluetoothInitialisedState(const QVariant &state);
 
 private:
+    void initBluetooth();
+    void deinitBluetooth();
+    void btInitialised(bool state);
+    const char *btEventName(const int id);
+
     QTranslator *_translator;
     LocaleHandler *_localeHandler;
     QmlDocument *_qml;
     AbstractPane *_root;
     QObject *_mainPage;
+    bool _bt_initialised;
+    bt_opp_callbacks_t _oppCallbacks;
 };
 
 #endif /* ApplicationUI_HPP_ */

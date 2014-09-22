@@ -26,15 +26,26 @@ Page {
         
         // ======== Properties =============
         
+        property bool bluetoothInitialisedState: false
+        
         // ======== SIGNAL()s ==============
         
-        signal task1Signal()
+        signal toggleBluetooth()
         signal task2Signal()
         
         // ======== SLOT()s ================
         
         function message(text) {
             logMessage(text);
+        }
+        
+        function onBluetoothInitialisedState(state) {
+            mainPage.bluetoothInitialisedState = state;
+            if (state) {
+                logMessage("Bluetooth Initialise");
+            } else {
+                logMessage("Bluetooth Terminated");
+            }
         }
         
         // ======== Local functions ========
@@ -63,19 +74,21 @@ Page {
                 orientation: LayoutOrientation.LeftToRight
             }
             Button {
-                id: buttonTask1
-                text: "Task 2"
+                id: toggleBluetoothButton
+                text: !mainPage.bluetoothInitialisedState ? "Start BT" : "Stop BT";
+                enabled: true
                 horizontalAlignment: HorizontalAlignment.Center
                 layoutProperties: StackLayoutProperties {
                     spaceQuota: 50
                 }
                 onClicked: {
-                    mainPage.task1Signal();
+                    mainPage.toggleBluetooth(!mainPage.bluetoothInitialisedState);
                 }
             }
             Button {
                 id: buttonTask2
                 text: "Task 2"
+                enabled: false
                 horizontalAlignment: HorizontalAlignment.Center
                 layoutProperties: StackLayoutProperties {
                     spaceQuota: 50
