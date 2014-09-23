@@ -48,6 +48,11 @@ void oppCancelledCallback(const char *bdaddr, bt_opp_reason_t reason)
 ApplicationUI::ApplicationUI(Application *app)
     : QObject(app)
     , _bt_initialised(false)
+    , _targetBtAddress("34:BB:1F:3E:77:BC") // Q10
+//  , _targetBtAddress("48:9D:24:AE:2E:59") // PPT
+    , _fileToSend("test.zip")
+    , _pathToFilesDirectory(QDir::currentPath().append("/app/public/files"))
+    , _downloadFolderWatcher(new QFileSystemWatcher(this))
 {
     s_btApp = this;
 
@@ -69,6 +74,13 @@ ApplicationUI::ApplicationUI(Application *app)
     _root = _qml->createRootObject<AbstractPane>();
     _mainPage = _root->findChild<QObject*>("mainPage");
 
+    _downloadFolderWatcher->addPath(QDir::currentPath().append("/shared/downloads"));
+
+    // ============== Watch the downloads directory
+
+    QObject::connect(_downloadFolderWatcher, SIGNAL(directoryChanged(const QString &)),
+                                       this, SLOT(onDirectoryChanged(const QString &)));
+
     // ============== Message to be sent to page
 
     QObject::connect(       this, SIGNAL(message(QVariant)),
@@ -76,11 +88,11 @@ ApplicationUI::ApplicationUI(Application *app)
 
     // ============== Hook up buttons
 
-    QObject::connect(  _mainPage, SIGNAL(toggleBluetooth(QVariant)),
-                            this, SLOT(onToggleBluetooth(QVariant)));
+    QObject::connect(  _mainPage, SIGNAL(toggleBluetooth(bool)),
+                            this, SLOT(onToggleBluetooth(bool)));
 
-    QObject::connect(  _mainPage, SIGNAL(task2Signal()),
-                            this, SLOT(onTask2Signal()));
+    QObject::connect(  _mainPage, SIGNAL(sendFile()),
+                            this, SLOT(onSendFile()));
 
     // ============== Connection state to page
 
@@ -101,17 +113,91 @@ void ApplicationUI::onSystemLanguageChanged()
     }
 }
 
-void ApplicationUI::onToggleBluetooth(const QVariant &on)
+void ApplicationUI::onDirectoryChanged(const QString &path)
 {
-    if (on.toBool()) {
+    qDebug() << "XXXX Directory changed" << path << endl;
+
+    QDir downloads(path);
+    QStringList nameFilters;
+    nameFilters << "*.zip";
+    QDir::Filters fileFilters = (QDir::Files | QDir::NoSymLinks | QDir::NoDotAndDotDot | QDir::Readable);
+    QDir::SortFlags sortOrder = (QDir::Time | QDir::Reversed);
+
+    QFileInfoList candidateFiles = downloads.entryInfoList(nameFilters, fileFilters, sortOrder);
+
+    for (int i = 0; i < candidateFiles.count(); i++) {
+
+        QString fileName = candidateFiles[i].fileName();
+        QString filePath = candidateFiles[i].filePath();
+        QFile receivedFile(filePath);
+
+        emit message(QString("Received file %1").arg(fileName));
+
+        QString program = "unzip";
+        QStringList arguments;
+
+        arguments << "-l";
+        arguments << filePath;
+
+        QProcess *unzip = new QProcess(this);
+
+        unzip->setReadChannel(QProcess::StandardOutput);
+        unzip->start(program, arguments);
+
+        if (unzip->waitForStarted()) {          // TODO: not a good idea on a GUI thread but this is a test for PoC
+            if (unzip->waitForFinished()) {     // TODO: not a good idea on a GUI thread but this is a test for PoC
+                QByteArray result = unzip->readAllStandardOutput();
+                QString unzipOutput(result);
+                qDebug() << "XXXX Unzip Command completed\n" << unzipOutput << endl;
+                emit message(unzipOutput);
+            } else {
+                qDebug() << "XXXX Unzip Command did not finish" << endl;
+            }
+        } else {
+            qDebug() << "XXXX Unzip Command did not start" << endl;
+        }
+
+        if (receivedFile.remove()) {
+            emit message(QString("Processed file %1").arg(fileName));
+        } else {
+            emit message(QString("Error removing file %1").arg(fileName));
+        }
+    }
+}
+
+void ApplicationUI::onToggleBluetooth(bool on)
+{
+    if (on) {
         initBluetooth();
     } else {
         deinitBluetooth();
     }
 }
 
-void ApplicationUI::onTask2Signal()
-{}
+void ApplicationUI::onSendFile()
+{
+    if (btIsInitialised()) {
+        QString testFilePath(_pathToFilesDirectory);
+
+        //testFilePath.append("/").append(_fileToSend);
+        //testFilePath = QString("/tmp/test.zip");
+        testFilePath = QString("/accounts/1000/sharewith/bluetooth/test.zip");
+
+        qDebug() << "XXXX Files directory    Path" << _pathToFilesDirectory << endl;
+        qDebug() << "XXXX Test File    Path" << testFilePath << endl;
+
+        if (bt_opp_send_file(_targetBtAddress.toLatin1().constData(), testFilePath.toLatin1().constData()) == EOK) {
+            qDebug() << "XXXX bt_opp_send_file() OK" << endl;
+            emit message(QString("Sending File %1 to %2").arg(_fileToSend).arg(_targetBtAddress));
+        } else {
+            qDebug() << "XXXX bt_opp_send_file() FAIL " << strerror(errno) << endl;
+            emit message(QString("bt_opp_send_file() FAIL %1").arg(strerror(errno)));
+        }
+
+    } else {
+        emit message("Bluetooth not initialised yet");
+    }
+}
 
 void ApplicationUI::btInitialised(bool state)
 {
@@ -119,6 +205,11 @@ void ApplicationUI::btInitialised(bool state)
 
     emit bluetoothInitialisedState(state);
 
+}
+
+bool ApplicationUI::btIsInitialised()
+{
+    return _bt_initialised;
 }
 
 void ApplicationUI::initBluetooth()
@@ -162,8 +253,6 @@ void ApplicationUI::handleBtEvent(const int event, const char *bt_addr, const ch
     qDebug() << "XXXX handleBtEvent - event=" << btEventName(event) <<
                                  ", bt_addr=" << bt_addr <<
                               ", event_data=" << event_data << endl;
-
-    // TODO:
 }
 
 void ApplicationUI::handleOppUpdateCallback(const char *bdaddr, uint32_t sent, uint32_t total)
@@ -176,7 +265,7 @@ void ApplicationUI::handleOppUpdateCallback(const char *bdaddr, uint32_t sent, u
                                                ", sent=" << sent <<
                                               ", total=" << total << endl;
 
-    // TODO:
+    emit message(QString("Transfer Update - sent %1 of %2").arg(sent).arg(total));
 }
 
 void ApplicationUI::handleOppCompleteCallback(const char *bdaddr)
@@ -185,7 +274,7 @@ void ApplicationUI::handleOppCompleteCallback(const char *bdaddr)
 
     qDebug() << "XXXX handleOppCompleteCallback - bdaddr=" << bdaddr << endl;
 
-    // TODO:
+    emit message("Transfer Complete");
 }
 
 void ApplicationUI::handleOppCancelledCallback(const char *bdaddr, bt_opp_reason_t reason)
@@ -194,35 +283,59 @@ void ApplicationUI::handleOppCancelledCallback(const char *bdaddr, bt_opp_reason
     Q_UNUSED(reason)
 
     qDebug() << "XXXX handleOppCancelledCallback - bdaddr=" << bdaddr <<
-                                                ", reason=" << reason << endl;
-    // TODO:
+                                                ", reason=" << oppReason(reason) << endl;
+    emit message(QString("Transfer Complete - %1").arg(oppReason(reason)));
 }
 
 const char *ApplicationUI::btEventName(const int id)
 {
     const event_names_t descriptions[] = {
             { BT_EVT_ACCESS_CHANGED, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_RADIO_SHUTDOWN, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_RADIO_INIT, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_CONFIRM_NUMERIC_REQUEST, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_PAIRING_COMPLETE, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_DEVICE_ADDED, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_DEVICE_DELETED, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_SERVICE_CONNECTED, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_SERVICE_DISCONNECTED, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_LE_DEVICE_CONNECTED, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_LE_DEVICE_DISCONNECTED, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_LE_NAME_UPDATED, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_LE_GATT_SERVICES_UPDATED, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_FAULT, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_UNDEFINED_EVENT, "BT_EVT_ACCESS_CHANGED" },
-            { -1, NULL }
+            { BT_EVT_RADIO_SHUTDOWN, "BT_EVT_RADIO_SHUTDOWN" },
+            { BT_EVT_RADIO_INIT, "BT_EVT_RADIO_INIT" },
+            { BT_EVT_CONFIRM_NUMERIC_REQUEST, "BT_EVT_CONFIRM_NUMERIC_REQUEST" },
+            { BT_EVT_PAIRING_COMPLETE, "BT_EVT_PAIRING_COMPLETE" },
+            { BT_EVT_DEVICE_ADDED, "BT_EVT_DEVICE_ADDED" },
+            { BT_EVT_DEVICE_DELETED, "BT_EVT_DEVICE_DELETED" },
+            { BT_EVT_SERVICE_CONNECTED, "BT_EVT_SERVICE_CONNECTED" },
+            { BT_EVT_SERVICE_DISCONNECTED, "BT_EVT_SERVICE_DISCONNECTED" },
+            { BT_EVT_FAULT, "BT_EVT_FAULT" },
+            { BT_EVT_DEVICE_CONNECTED, "BT_EVT_DEVICE_CONNECTED" },
+            { BT_EVT_DEVICE_DISCONNECTED, "BT_EVT_DEVICE_DISCONNECTED" },
+            { BT_EVT_NAME_UPDATED, "BT_EVT_NAME_UPDATED" },
+            { BT_EVT_LE_DEVICE_CONNECTED, "BT_EVT_LE_DEVICE_CONNECTED" },
+            { BT_EVT_LE_DEVICE_DISCONNECTED, "BT_EVT_LE_DEVICE_DISCONNECTED" },
+            { BT_EVT_LE_NAME_UPDATED, "BT_EVT_LE_NAME_UPDATED" },
+            { BT_EVT_SERVICES_UPDATED, "BT_EVT_SERVICES_UPDATED" },
+            { BT_EVT_GATT_SERVICES_UPDATED, "BT_EVT_GATT_SERVICES_UPDATED" },
+            { BT_EVT_LE_GATT_SERVICES_UPDATED, "BT_EVT_LE_GATT_SERVICES_UPDATED" },
+            { BT_EVT_PAIRING_DELETED, "BT_EVT_PAIRING_DELETED" },
+            { BT_EVT_PAIRING_STARTED, "BT_EVT_PAIRING_STARTED" },
+            { BT_EVT_PAIRING_FAILED, "BT_EVT_PAIRING_FAILED" },
+            { BT_EVT_UNDEFINED_EVENT, "BT_EVT_UNDEFINED_EVENT" }
     };
-    int i;
-    for (i = 0; descriptions[i].id != -1; i++) {
+
+    for (int i = 0; i < (int)(sizeof(descriptions)/sizeof(event_names_t)); i++) {
         if (descriptions[i].id == id) {
             return descriptions[i].name;
         }
     }
     return "Unknown Event";
+}
+
+const char *ApplicationUI::oppReason(const bt_opp_reason_t reason)
+{
+    const opp_reason_names_t descriptions[] = {
+            { BT_OPP_DEVICE_NOT_AVAILABLE, "BT_OPP_DEVICE_NOT_AVAILABLE" },
+            { BT_OPP_TRANSFER_CANCELLED, "BT_OPP_TRANSFER_CANCELLED" },
+            { BT_OPP_FAILED_TO_FIND_SERVICE, "BT_OPP_FAILED_TO_FIND_SERVICE" },
+            { BT_OPP_TRANSFER_INTERRUPTED, "BT_OPP_TRANSFER_INTERRUPTED" }
+    };
+
+    for (int i = 0; i < (int)(sizeof(descriptions)/sizeof(opp_reason_names_t)); i++) {
+        if (descriptions[i].reason == reason) {
+            return descriptions[i].name;
+        }
+    }
+    return "Unknown Reason";
 }

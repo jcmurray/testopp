@@ -30,8 +30,8 @@ Page {
         
         // ======== SIGNAL()s ==============
         
-        signal toggleBluetooth()
-        signal task2Signal()
+        signal toggleBluetooth(bool on)
+        signal sendFile()
         
         // ======== SLOT()s ================
         
@@ -86,15 +86,15 @@ Page {
                 }
             }
             Button {
-                id: buttonTask2
-                text: "Task 2"
-                enabled: false
+                id: sendFileButton
+                text: "Send File"
+                enabled: mainPage.bluetoothInitialisedState
                 horizontalAlignment: HorizontalAlignment.Center
                 layoutProperties: StackLayoutProperties {
                     spaceQuota: 50
                 }
                 onClicked: {
-                    mainPage.task2Signal();
+                    mainPage.sendFile();
                 }
             }
         }

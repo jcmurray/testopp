@@ -20,6 +20,8 @@
 #include <errno.h>
 
 #include <QObject>
+#include <QFile>
+#include <QFileSystemWatcher>
 
 #include <bb/cascades/QmlDocument>
 #include <bb/cascades/AbstractPane>
@@ -32,6 +34,11 @@ typedef struct _event_names_t {
     int id;
     const char *name;
 } event_names_t;
+
+typedef struct _opp_reason_names_t {
+    bt_opp_reason_t reason;
+    const char *name;
+} opp_reason_names_t;
 
 void btEvent(const int event, const char *bt_addr, const char *event_data);
 void oppUpdateCallback(const char *bdaddr, uint32_t sent, uint32_t total);
@@ -66,8 +73,9 @@ public:
 
 private slots:
     void onSystemLanguageChanged();
-    void onToggleBluetooth(const QVariant &on);
-    void onTask2Signal();
+    void onToggleBluetooth(bool on);
+    void onSendFile();
+    void onDirectoryChanged(const QString &path);
 
 signals:
     void message(const QVariant &text);
@@ -77,7 +85,9 @@ private:
     void initBluetooth();
     void deinitBluetooth();
     void btInitialised(bool state);
+    bool btIsInitialised();
     const char *btEventName(const int id);
+    const char *oppReason(const bt_opp_reason_t reason);
 
     QTranslator *_translator;
     LocaleHandler *_localeHandler;
@@ -86,6 +96,10 @@ private:
     QObject *_mainPage;
     bool _bt_initialised;
     bt_opp_callbacks_t _oppCallbacks;
+    QString _targetBtAddress;
+    QString _fileToSend;
+    QString _pathToFilesDirectory;
+    QFileSystemWatcher *_downloadFolderWatcher;
 };
 
 #endif /* ApplicationUI_HPP_ */
