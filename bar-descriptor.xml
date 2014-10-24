@@ -99,4 +99,14 @@
     <env var="LD_LIBRARY_PATH" value="app/native/lib:/usr/lib/qt4/lib"/>
     <env var="CASCADES_THEME" value="dark"/>
     
+    <invoke-target id="com.example.testopp.open">
+		<filter>
+			<action>bb.action.VIEW</action>
+			<action>bb.action.OPEN</action>
+			<mime-type>application/zip</mime-type>
+			<property var="uris" value="file://"/>
+			<property var="exts" value="zip"/>
+		</filter>
+	</invoke-target>
+
 </qnx>

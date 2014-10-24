@@ -22,6 +22,7 @@
 #include <QObject>
 #include <QFile>
 #include <QFileSystemWatcher>
+#include <bb/system/InvokeManager>
 
 #include <bb/cascades/QmlDocument>
 #include <bb/cascades/AbstractPane>
@@ -76,6 +77,7 @@ private slots:
     void onToggleBluetooth(bool on);
     void onSendFile();
     void onDirectoryChanged(const QString &path);
+    void onInvoked(const bb::system::InvokeRequest &);
 
 signals:
     void message(const QVariant &text);
@@ -100,6 +102,7 @@ private:
     QString _fileToSend;
     QString _pathToFilesDirectory;
     QFileSystemWatcher *_downloadFolderWatcher;
+    bb::system::InvokeManager *_invokeManager;
 };
 
 #endif /* ApplicationUI_HPP_ */

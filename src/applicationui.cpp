@@ -48,13 +48,19 @@ void oppCancelledCallback(const char *bdaddr, bt_opp_reason_t reason)
 ApplicationUI::ApplicationUI(Application *app)
     : QObject(app)
     , _bt_initialised(false)
-    , _targetBtAddress("34:BB:1F:3E:77:BC") // Q10
-//  , _targetBtAddress("48:9D:24:AE:2E:59") // PPT
+//  , _targetBtAddress("34:BB:1F:3E:77:BC") // Q10
+    , _targetBtAddress("48:9D:24:AE:2E:59") // PPT
     , _fileToSend("test.zip")
     , _pathToFilesDirectory(QDir::currentPath().append("/app/public/files"))
     , _downloadFolderWatcher(new QFileSystemWatcher(this))
+    , _invokeManager(new bb::system::InvokeManager(this))
 {
     s_btApp = this;
+
+    if(!QObject::connect(_invokeManager, SIGNAL(invoked(const bb::system::InvokeRequest&)),
+                                   this, SLOT(onInvoked(const bb::system::InvokeRequest&)))) {
+        qWarning() << "XXXX ApplicationUI::ApplicationUI() - connect failed - onInvoked" << strerror(errno) << endl;
+    }
 
     _oppCallbacks.update = oppUpdateCallback;
     _oppCallbacks.complete = oppCompleteCallback;
@@ -101,6 +107,31 @@ ApplicationUI::ApplicationUI(Application *app)
 
 
     Application::instance()->setScene(_root);
+}
+
+void ApplicationUI::onInvoked(const bb::system::InvokeRequest &request)
+{
+    qDebug() << "XXXX Received invoke action=" << request.action() << endl;
+    qDebug() << "XXXX Received invoke target=" << request.target() << endl;
+    qDebug() << "XXXX Received invoke mime-type=" << request.mimeType() << endl;
+    qDebug() << "XXXX Received invoke uri=" << request.uri() << endl;
+
+    bool isLocalZipFile = (request.action().compare("bb.action.OPEN", Qt::CaseInsensitive) == 0) &&
+                          (request.target().compare("com.example.testopp.open", Qt::CaseInsensitive) == 0) &&
+                          (request.mimeType().compare("application/zip", Qt::CaseInsensitive) == 0) &&
+                          (request.uri().isLocalFile());
+
+    if (isLocalZipFile) {
+        QString localFilePath = request.uri().toLocalFile();
+        QFile localFile(localFilePath);
+        if (localFile.remove()) {
+            emit message(QString("Processed file %1").arg(localFilePath));
+        } else {
+            emit message(QString("Error removing file %1").arg(localFilePath));
+        }
+    } else {
+        qDebug() << "XXXX Disregarding file uri=" << request.uri() << endl;
+    }
 }
 
 void ApplicationUI::onSystemLanguageChanged()
@@ -156,12 +187,13 @@ void ApplicationUI::onDirectoryChanged(const QString &path)
         } else {
             qDebug() << "XXXX Unzip Command did not start" << endl;
         }
-
+/*
         if (receivedFile.remove()) {
             emit message(QString("Processed file %1").arg(fileName));
         } else {
             emit message(QString("Error removing file %1").arg(fileName));
         }
+*/
     }
 }
 
