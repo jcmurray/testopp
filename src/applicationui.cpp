@@ -118,6 +118,8 @@ void ApplicationUI::onDirectoryChanged(const QString &path)
             qDebug() << "XXXX Unzip Command did not start" << endl;
         }
 
+        delete unzip;
+
         if (receivedFile.remove()) {
             emit message(QString("Processed file %1").arg(fileName));
         } else {
