@@ -26,26 +26,12 @@ Page {
         
         // ======== Properties =============
         
-        property bool bluetoothInitialisedState: false
-        
         // ======== SIGNAL()s ==============
-        
-        signal toggleBluetooth(bool on)
-        signal sendFile()
         
         // ======== SLOT()s ================
         
         function message(text) {
             logMessage(text);
-        }
-        
-        function onBluetoothInitialisedState(state) {
-            mainPage.bluetoothInitialisedState = state;
-            if (state) {
-                logMessage("Bluetooth Initialise");
-            } else {
-                logMessage("Bluetooth Terminated");
-            }
         }
         
         // ======== Local functions ========
@@ -72,30 +58,6 @@ Page {
         Container {
             layout: StackLayout {
                 orientation: LayoutOrientation.LeftToRight
-            }
-            Button {
-                id: toggleBluetoothButton
-                text: !mainPage.bluetoothInitialisedState ? "Start BT" : "Stop BT";
-                enabled: true
-                horizontalAlignment: HorizontalAlignment.Center
-                layoutProperties: StackLayoutProperties {
-                    spaceQuota: 50
-                }
-                onClicked: {
-                    mainPage.toggleBluetooth(!mainPage.bluetoothInitialisedState);
-                }
-            }
-            Button {
-                id: sendFileButton
-                text: "Send File"
-                enabled: mainPage.bluetoothInitialisedState
-                horizontalAlignment: HorizontalAlignment.Center
-                layoutProperties: StackLayoutProperties {
-                    spaceQuota: 50
-                }
-                onClicked: {
-                    mainPage.sendFile();
-                }
             }
         }
         

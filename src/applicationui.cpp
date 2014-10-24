@@ -25,47 +25,12 @@ using namespace bb::cascades;
 
 static ApplicationUI *s_btApp = NULL;
 
-void btEvent(const int event, const char *bt_addr, const char *event_data)
-{
-    if (s_btApp) s_btApp->handleBtEvent(event, bt_addr, event_data);
-}
-
-void oppUpdateCallback(const char *bdaddr, uint32_t sent, uint32_t total)
-{
-    if (s_btApp) s_btApp->handleOppUpdateCallback(bdaddr, sent, total);
-}
-
-void oppCompleteCallback(const char *bdaddr)
-{
-    if (s_btApp) s_btApp->handleOppCompleteCallback(bdaddr);
-}
-
-void oppCancelledCallback(const char *bdaddr, bt_opp_reason_t reason)
-{
-    if (s_btApp) s_btApp->handleOppCancelledCallback(bdaddr, reason);
-}
-
 ApplicationUI::ApplicationUI(Application *app)
     : QObject(app)
-    , _bt_initialised(false)
-//  , _targetBtAddress("34:BB:1F:3E:77:BC") // Q10
-    , _targetBtAddress("48:9D:24:AE:2E:59") // PPT
-    , _fileToSend("test.zip")
     , _pathToFilesDirectory(QDir::currentPath().append("/app/public/files"))
     , _downloadFolderWatcher(new QFileSystemWatcher(this))
-    , _invokeManager(new bb::system::InvokeManager(this))
 {
     s_btApp = this;
-
-    if(!QObject::connect(_invokeManager, SIGNAL(invoked(const bb::system::InvokeRequest&)),
-                                   this, SLOT(onInvoked(const bb::system::InvokeRequest&)))) {
-        qWarning() << "XXXX ApplicationUI::ApplicationUI() - connect failed - onInvoked" << strerror(errno) << endl;
-    }
-
-    _oppCallbacks.update = oppUpdateCallback;
-    _oppCallbacks.complete = oppCompleteCallback;
-    _oppCallbacks.cancelled = oppCancelledCallback;
-
     _translator = new QTranslator(this);
     _localeHandler = new LocaleHandler(this);
 
@@ -94,44 +59,9 @@ ApplicationUI::ApplicationUI(Application *app)
 
     // ============== Hook up buttons
 
-    QObject::connect(  _mainPage, SIGNAL(toggleBluetooth(bool)),
-                            this, SLOT(onToggleBluetooth(bool)));
-
-    QObject::connect(  _mainPage, SIGNAL(sendFile()),
-                            this, SLOT(onSendFile()));
-
     // ============== Connection state to page
 
-    QObject::connect(       this, SIGNAL(bluetoothInitialisedState(QVariant)),
-                       _mainPage, SLOT(onBluetoothInitialisedState(QVariant)));
-
-
     Application::instance()->setScene(_root);
-}
-
-void ApplicationUI::onInvoked(const bb::system::InvokeRequest &request)
-{
-    qDebug() << "XXXX Received invoke action=" << request.action() << endl;
-    qDebug() << "XXXX Received invoke target=" << request.target() << endl;
-    qDebug() << "XXXX Received invoke mime-type=" << request.mimeType() << endl;
-    qDebug() << "XXXX Received invoke uri=" << request.uri() << endl;
-
-    bool isLocalZipFile = (request.action().compare("bb.action.OPEN", Qt::CaseInsensitive) == 0) &&
-                          (request.target().compare("com.example.testopp.open", Qt::CaseInsensitive) == 0) &&
-                          (request.mimeType().compare("application/zip", Qt::CaseInsensitive) == 0) &&
-                          (request.uri().isLocalFile());
-
-    if (isLocalZipFile) {
-        QString localFilePath = request.uri().toLocalFile();
-        QFile localFile(localFilePath);
-        if (localFile.remove()) {
-            emit message(QString("Processed file %1").arg(localFilePath));
-        } else {
-            emit message(QString("Error removing file %1").arg(localFilePath));
-        }
-    } else {
-        qDebug() << "XXXX Disregarding file uri=" << request.uri() << endl;
-    }
 }
 
 void ApplicationUI::onSystemLanguageChanged()
@@ -187,187 +117,11 @@ void ApplicationUI::onDirectoryChanged(const QString &path)
         } else {
             qDebug() << "XXXX Unzip Command did not start" << endl;
         }
-/*
+
         if (receivedFile.remove()) {
             emit message(QString("Processed file %1").arg(fileName));
         } else {
             emit message(QString("Error removing file %1").arg(fileName));
         }
-*/
     }
-}
-
-void ApplicationUI::onToggleBluetooth(bool on)
-{
-    if (on) {
-        initBluetooth();
-    } else {
-        deinitBluetooth();
-    }
-}
-
-void ApplicationUI::onSendFile()
-{
-    if (btIsInitialised()) {
-        QString testFilePath(_pathToFilesDirectory);
-
-        //testFilePath.append("/").append(_fileToSend);
-        //testFilePath = QString("/tmp/test.zip");
-        testFilePath = QString("/accounts/1000/sharewith/bluetooth/test.zip");
-
-        qDebug() << "XXXX Files directory    Path" << _pathToFilesDirectory << endl;
-        qDebug() << "XXXX Test File    Path" << testFilePath << endl;
-
-        if (bt_opp_send_file(_targetBtAddress.toLatin1().constData(), testFilePath.toLatin1().constData()) == EOK) {
-            qDebug() << "XXXX bt_opp_send_file() OK" << endl;
-            emit message(QString("Sending File %1 to %2").arg(_fileToSend).arg(_targetBtAddress));
-        } else {
-            qDebug() << "XXXX bt_opp_send_file() FAIL " << strerror(errno) << endl;
-            emit message(QString("bt_opp_send_file() FAIL %1").arg(strerror(errno)));
-        }
-
-    } else {
-        emit message("Bluetooth not initialised yet");
-    }
-}
-
-void ApplicationUI::btInitialised(bool state)
-{
-    _bt_initialised = state;
-
-    emit bluetoothInitialisedState(state);
-
-}
-
-bool ApplicationUI::btIsInitialised()
-{
-    return _bt_initialised;
-}
-
-void ApplicationUI::initBluetooth()
-{
-    if (bt_device_init(btEvent) == EOK) {
-        qDebug() << "XXXX bt_device_init() OK" << endl;
-    } else {
-        qDebug() << "XXXX bt_device_init() FAIL " << strerror(errno) << endl;
-        emit message(QString("bt_device_init() FAIL %1").arg(strerror(errno)));
-        return;
-    }
-
-    if (bt_opp_init(&_oppCallbacks) == EOK) {
-        qDebug() << "XXXX bt_opp_init() OK" << endl;
-    } else {
-        qDebug() << "XXXX bt_opp_init() FAIL " << strerror(errno) << endl;
-        emit message(QString("bt_opp_init() FAIL %1").arg(strerror(errno)));
-        return;
-    }
-
-    btInitialised(true);
-
-}
-
-void ApplicationUI::deinitBluetooth()
-{
-    qDebug() << "XXXX Calling bt_opp_deinit()" << endl;
-    bt_opp_deinit();
-    qDebug() << "XXXX Calling bt_device_deinit()" << endl;
-    bt_device_deinit();
-
-    btInitialised(false);
-}
-
-void ApplicationUI::handleBtEvent(const int event, const char *bt_addr, const char *event_data)
-{
-    Q_UNUSED(event)
-    Q_UNUSED(bt_addr)
-    Q_UNUSED(event_data)
-
-    qDebug() << "XXXX handleBtEvent - event=" << btEventName(event) <<
-                                 ", bt_addr=" << bt_addr <<
-                              ", event_data=" << event_data << endl;
-}
-
-void ApplicationUI::handleOppUpdateCallback(const char *bdaddr, uint32_t sent, uint32_t total)
-{
-    Q_UNUSED(bdaddr)
-    Q_UNUSED(sent)
-    Q_UNUSED(total)
-
-    qDebug() << "XXXX handleOppUpdateCallback - bdaddr=" << bdaddr <<
-                                               ", sent=" << sent <<
-                                              ", total=" << total << endl;
-
-    emit message(QString("Transfer Update - sent %1 of %2").arg(sent).arg(total));
-}
-
-void ApplicationUI::handleOppCompleteCallback(const char *bdaddr)
-{
-    Q_UNUSED(bdaddr)
-
-    qDebug() << "XXXX handleOppCompleteCallback - bdaddr=" << bdaddr << endl;
-
-    emit message("Transfer Complete");
-}
-
-void ApplicationUI::handleOppCancelledCallback(const char *bdaddr, bt_opp_reason_t reason)
-{
-    Q_UNUSED(bdaddr)
-    Q_UNUSED(reason)
-
-    qDebug() << "XXXX handleOppCancelledCallback - bdaddr=" << bdaddr <<
-                                                ", reason=" << oppReason(reason) << endl;
-    emit message(QString("Transfer Complete - %1").arg(oppReason(reason)));
-}
-
-const char *ApplicationUI::btEventName(const int id)
-{
-    const event_names_t descriptions[] = {
-            { BT_EVT_ACCESS_CHANGED, "BT_EVT_ACCESS_CHANGED" },
-            { BT_EVT_RADIO_SHUTDOWN, "BT_EVT_RADIO_SHUTDOWN" },
-            { BT_EVT_RADIO_INIT, "BT_EVT_RADIO_INIT" },
-            { BT_EVT_CONFIRM_NUMERIC_REQUEST, "BT_EVT_CONFIRM_NUMERIC_REQUEST" },
-            { BT_EVT_PAIRING_COMPLETE, "BT_EVT_PAIRING_COMPLETE" },
-            { BT_EVT_DEVICE_ADDED, "BT_EVT_DEVICE_ADDED" },
-            { BT_EVT_DEVICE_DELETED, "BT_EVT_DEVICE_DELETED" },
-            { BT_EVT_SERVICE_CONNECTED, "BT_EVT_SERVICE_CONNECTED" },
-            { BT_EVT_SERVICE_DISCONNECTED, "BT_EVT_SERVICE_DISCONNECTED" },
-            { BT_EVT_FAULT, "BT_EVT_FAULT" },
-            { BT_EVT_DEVICE_CONNECTED, "BT_EVT_DEVICE_CONNECTED" },
-            { BT_EVT_DEVICE_DISCONNECTED, "BT_EVT_DEVICE_DISCONNECTED" },
-            { BT_EVT_NAME_UPDATED, "BT_EVT_NAME_UPDATED" },
-            { BT_EVT_LE_DEVICE_CONNECTED, "BT_EVT_LE_DEVICE_CONNECTED" },
-            { BT_EVT_LE_DEVICE_DISCONNECTED, "BT_EVT_LE_DEVICE_DISCONNECTED" },
-            { BT_EVT_LE_NAME_UPDATED, "BT_EVT_LE_NAME_UPDATED" },
-            { BT_EVT_SERVICES_UPDATED, "BT_EVT_SERVICES_UPDATED" },
-            { BT_EVT_GATT_SERVICES_UPDATED, "BT_EVT_GATT_SERVICES_UPDATED" },
-            { BT_EVT_LE_GATT_SERVICES_UPDATED, "BT_EVT_LE_GATT_SERVICES_UPDATED" },
-            { BT_EVT_PAIRING_DELETED, "BT_EVT_PAIRING_DELETED" },
-            { BT_EVT_PAIRING_STARTED, "BT_EVT_PAIRING_STARTED" },
-            { BT_EVT_PAIRING_FAILED, "BT_EVT_PAIRING_FAILED" },
-            { BT_EVT_UNDEFINED_EVENT, "BT_EVT_UNDEFINED_EVENT" }
-    };
-
-    for (int i = 0; i < (int)(sizeof(descriptions)/sizeof(event_names_t)); i++) {
-        if (descriptions[i].id == id) {
-            return descriptions[i].name;
-        }
-    }
-    return "Unknown Event";
-}
-
-const char *ApplicationUI::oppReason(const bt_opp_reason_t reason)
-{
-    const opp_reason_names_t descriptions[] = {
-            { BT_OPP_DEVICE_NOT_AVAILABLE, "BT_OPP_DEVICE_NOT_AVAILABLE" },
-            { BT_OPP_TRANSFER_CANCELLED, "BT_OPP_TRANSFER_CANCELLED" },
-            { BT_OPP_FAILED_TO_FIND_SERVICE, "BT_OPP_FAILED_TO_FIND_SERVICE" },
-            { BT_OPP_TRANSFER_INTERRUPTED, "BT_OPP_TRANSFER_INTERRUPTED" }
-    };
-
-    for (int i = 0; i < (int)(sizeof(descriptions)/sizeof(opp_reason_names_t)); i++) {
-        if (descriptions[i].reason == reason) {
-            return descriptions[i].name;
-        }
-    }
-    return "Unknown Reason";
 }
